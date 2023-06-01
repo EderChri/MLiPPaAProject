@@ -84,16 +84,19 @@ def plot_first_row(data="output.txt"):
     plt.show()
 
 
-def plot_histogram(input="parameter.txt"):
-    data = pd.read_csv(input)
-    for i in range((len(data.columns))//2, 2):
-        plt.hist(data.columns[i+1], density=True, bins=30)
-        plt.show()
+def plot_histogram(path="parameter.txt"):
+    data = pd.read_csv(path)
+    plot_data = data.iloc[:,1]
+    for i in range(3, (len(data.columns)) - 1, 2):
+        pd.concat([plot_data, data.iloc[:,i]])
+    plt.hist(plot_data)
+    plt.show()
 
 
-if __name__ == '__main__':
-    #data, parameter = generate_data()
-    #print_data(data)
-    #print_data(parameter, "parameter.txt")
+if __name__ == '__main__':  #
+    np.random.seed(42)
+    # data, parameter = generate_data()
+    # print_data(data)
+    # print_data(parameter, "parameter.txt")
     plot_first_row("output.txt")
     plot_histogram()
