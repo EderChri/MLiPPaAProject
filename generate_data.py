@@ -5,6 +5,7 @@ import pandas as pd
 from shapely.geometry import Point, LineString
 import matplotlib.pyplot as plt
 from tqdm import tqdm
+import constants
 
 
 def circle_line_intersection(circle_center, circle_radius, line_point1, line_point2):
@@ -35,7 +36,7 @@ def add_noise(point, noise):
 
 def generate_data(nr_events=50_000, nr_tracks=3, noise=0.1):
     origin = (0, 0)
-    detector_rad = [1, 2, 3, 4, 5]
+    detector_rad = constants.DETECTOR_RADII
     detector_intersect = [0 for _ in range(nr_tracks * len(detector_rad))]
     event_dict = {}
     parameter_dict = {}
