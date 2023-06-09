@@ -2,7 +2,9 @@
 Transformer implementation.
 Taken from https://github.com/saulam/trajectory_fitting/tree/main
 """
+from typing import Optional
 
+import torch
 from torch import Tensor
 import torch.nn as nn
 from torch.nn import TransformerEncoder, TransformerEncoderLayer
@@ -16,8 +18,8 @@ class FittingTransformer(nn.Module):
                  input_size: int,  # size of each item in the input sequence
                  output_size: int,  # size of each item in the output sequence
                  dim_feedforward: int = 512,  # dimension of the feedforward network of the Transformer
-                 dropout: float = 0.1  # dropout value
-                 ):
+                 dropout: float = 0.1,  # dropout value
+                 seq_len: int = 15):
         super(FittingTransformer, self).__init__()
         encoder_layers = TransformerEncoderLayer(d_model=d_model,
                                                  nhead=n_head,
@@ -25,6 +27,7 @@ class FittingTransformer(nn.Module):
                                                  dropout=dropout)
         self.transformer_encoder = TransformerEncoder(encoder_layers, num_encoder_layers)
         self.proj_input = nn.Linear(input_size, d_model)
+        self.aggregator = nn.Linear(seq_len, 1)
         self.decoder = nn.Linear(d_model, output_size)
         self.dropout = nn.Dropout(dropout)
         self.init_weights()
@@ -37,16 +40,26 @@ class FittingTransformer(nn.Module):
         self.decoder.weight.data.uniform_(-init_range, init_range)
 
     def forward(self,
-                src: Tensor,
-                src_mask: Tensor,
-                src_padding_mask: Tensor):
-        # linear projection of the input
-        src_emb = self.proj_input(src)
-        # transformer encoder
-        memory = self.transformer_encoder(src=src_emb, mask=src_mask,
-                                          src_key_padding_mask=src_padding_mask)
-        # dropout
+                x: Tensor,  # Separate x tensor
+                y: Tensor,  # Separate y tensor
+                z: Optional[Tensor] = None,  # Separate z tensor; works with None
+                ):
+        # Initialize a tensor of zeros with the same size as the x and y tensors when z is None
+        if z is None:
+            z = torch.zeros_like(x)
+
+        # Combine x, y, and z tensors into coords tensor of shape (batch_size, sequence_length, 3)
+        coords = torch.stack((x, y, z), dim=2)
+
+        # Linear projection of the input
+        src_emb = self.proj_input(coords)
+        # Transformer encoder
+        memory = self.transformer_encoder(src=src_emb)
+        memory = self.aggregator(memory.permute(0, 2, 1))
+        memory = memory.squeeze(dim=2)
+        # Dropout
         memory = self.dropout(memory)
-        # linear projection of the output
-        output = self.decoder(memory) + src[:, :, :3]  # learn residuals for x,y,z
+        # Linear projection of the output
+        output = self.decoder(memory) #+ coords[:, :, :3]  # Learn residuals for x, y, z
+
         return output

@@ -49,6 +49,8 @@ class TrajectoryDataset(Dataset):
         z = None
         if DIMENSION == 3:
             z = data[3::DIMENSION+1]
+        if DIMENSION == 2:
+            z = [0] * len(x)
         tracks = [track for track in range(int(data[-1])+1)]
 
         # normalise
@@ -59,8 +61,7 @@ class TrajectoryDataset(Dataset):
         if self.to_tensor:
             x = torch.tensor(x).float()
             y = torch.tensor(y).float()
-            if DIMENSION == 3:
-                z = torch.tensor(y).float()
+            z = torch.tensor(z).float()
             tracks = torch.tensor(tracks).int()
             labels = torch.tensor(labels).float()
 
