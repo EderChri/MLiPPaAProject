@@ -3,3 +3,4 @@ NR_DETECTORS = len(DETECTOR_RADII)
 DIMENSION = 2 # dimensionality of data
 DATA_PATH = "output.txt"
 LABEL_PATH = "parameter.txt"
+BATCH_SIZE = 32

@@ -3,12 +3,12 @@ import torch
 import os
 import math
 import numpy as np
-from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader, random_split
 from timeit import default_timer as timer
 from dataset import TrajectoryDataset
 from constants import *
 from transformer import FittingTransformer
+from utils import custom_collate, earth_mover_distance
 
 # manually specify the GPUs to use
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
@@ -17,59 +17,6 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 # training dataset
 dataset = TrajectoryDataset(DATA_PATH, LABEL_PATH)
 
-
-# Transformer masks
-# def create_mask_src(src):
-#     src_seq_len = src.shape[0]
-#
-#     src_mask = torch.zeros((src_seq_len, src_seq_len), device=DEVICE).type(torch.bool)
-#     src_padding_mask = (src[:, :, 0] == PAD_IDX).transpose(0, 1)
-#
-#     return src_mask, src_padding_mask
-#
-#
-# # function to collate data samples into batched tensors
-# def collate_fn(batch):
-#     (xx, yy) = zip(*batch)
-#
-#     xx = [x for x in xx]
-#     yy = [y for y in yy]
-#
-#     x_lens = [len(x) for x in xx]
-#     y_lens = [len(y) for y in yy]
-#
-#     xx_pad = pad_sequence(xx, batch_first=False, padding_value=PAD_IDX)
-#     yy_pad = pad_sequence(yy, batch_first=False, padding_value=PAD_IDX)
-#
-#     return xx_pad, yy_pad, x_lens, y_lens
-
-def custom_collate(batch):
-    event_ids = []
-    xs = []
-    ys = []
-    zs = []
-    tracks = []
-    labels = []
-
-    for b in batch:
-        # Assuming z (b[3]) is the variable that can be None
-        if b[3] is not None:
-            event_ids.append(b[0])
-            xs.append(b[1])
-            ys.append(b[2])
-            zs.append(b[3])
-            tracks.append(b[4])
-            labels.append(b[5])
-
-    # Convert the lists to tensors, except for the event_id since it might not be a tensor
-    xs = torch.stack(xs)
-    ys = torch.stack(ys)
-    zs = torch.stack(zs)
-    tracks = torch.stack(tracks)
-    labels = torch.stack(labels)
-
-    # Return the final processed batch
-    return event_ids, xs, ys, zs, tracks, labels
 
 # training function (to be called per epoch)
 def train_epoch(model, optim, disable_tqdm, batch_size):
@@ -84,14 +31,12 @@ def train_epoch(model, optim, disable_tqdm, batch_size):
         y = y.to(DEVICE)
         if z is not None:
             z = z.to(DEVICE)
-        tracks = tracks.to(DEVICE)
         if labels is not None:
             labels = labels.to(DEVICE)
 
-
         # run model
         if z is not None:
-            pred = model(x,y,z)
+            pred = model(x, y, z)
         else:
             pred = model(x, y)
 
@@ -110,10 +55,10 @@ def train_epoch(model, optim, disable_tqdm, batch_size):
 
 
 # test function
-def evaluate(model, disable_tqdm):
+def evaluate(model, disable_tqdm, batch_size):
     model.eval()
     losses = 0
-    n_batches = int(math.ceil(len(valid_loader.dataset) / 32))
+    n_batches = int(math.ceil(len(valid_loader.dataset) / batch_size))
     t = tqdm.tqdm(enumerate(valid_loader), total=n_batches, disable=disable_tqdm)
 
     with torch.no_grad():
@@ -130,7 +75,7 @@ def evaluate(model, disable_tqdm):
             # create masks
 
             # run model
-            pred = model(x,y,z)
+            pred = model(x, y, z)
 
             loss = loss_fn(pred, labels)
             losses += loss.item()
@@ -146,18 +91,18 @@ if __name__ == '__main__':
     val_len = full_len - train_len
     train_set, val_set, = random_split(dataset, [train_len, val_len],
                                        generator=torch.Generator().manual_seed(7))
-    train_loader = DataLoader(train_set, batch_size=32,
+    train_loader = DataLoader(train_set, batch_size=BATCH_SIZE,
                               num_workers=4, shuffle=True, collate_fn=custom_collate)
-    valid_loader = DataLoader(val_set, batch_size=32,
+    valid_loader = DataLoader(val_set, batch_size=BATCH_SIZE,
                               num_workers=4, shuffle=False, collate_fn=custom_collate)
 
     torch.manual_seed(7)  # for reproducibility
     DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # Transformer model
-    transformer = FittingTransformer(num_encoder_layers=1,
-                                     d_model=1,
-                                     n_head=1,
+    transformer = FittingTransformer(num_encoder_layers=4,
+                                     d_model=32,
+                                     n_head=4,
                                      input_size=3,
                                      output_size=3,
                                      dim_feedforward=1)
@@ -168,7 +113,7 @@ if __name__ == '__main__':
     print("Total trainable params: {}".format(pytorch_total_params))
 
     # loss and optimiser
-    loss_fn = torch.nn.MSELoss()  # MSE loss
+    loss_fn = torch.nn.MSELoss()  # earth_mover_distance  # EMD loss
     optimizer = torch.optim.Adam(transformer.parameters(), lr=1e-4)
 
     train_losses, val_losses = [], []
@@ -192,9 +137,9 @@ if __name__ == '__main__':
 
     for epoch in range(epoch, 10 + 1):
         start_time = timer()
-        train_loss = train_epoch(transformer, optimizer, disable,16)
+        train_loss = train_epoch(transformer, optimizer, disable, BATCH_SIZE)
         end_time = timer()
-        val_loss = evaluate(transformer, disable)
+        val_loss = evaluate(transformer, disable, BATCH_SIZE)
         print((f"Epoch: {epoch}, Train loss: {train_loss:.8f}, "
                f"Val loss: {val_loss:.8f}, "f"Epoch time = {(end_time - start_time):.3f}s"))
 

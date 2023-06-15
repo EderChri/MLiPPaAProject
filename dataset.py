@@ -3,23 +3,14 @@ Dataset module.
 """
 from dataclasses import dataclass
 
+import numpy as np
 import torch
 from torch.utils.data import Dataset
 from glob import glob
 import pandas as pd
 
 from constants import DIMENSION, NR_DETECTORS
-
-
-class Point:
-
-    def __int__(self, coordinates, track):
-        self.x = coordinates[0]
-        self.y = coordinates[1]
-        self.z = None
-        if len(coordinates) == 3:
-            self.z = coordinates[2]
-        self.track = track
+from utils import cart2cyl, sort_by_angle
 
 
 class TrajectoryDataset(Dataset):
@@ -44,18 +35,33 @@ class TrajectoryDataset(Dataset):
         event_labels = self.labels.iloc[[event_id]].values.tolist()[0]
 
         labels = event_labels[1::2]
-        x = data[1::DIMENSION+1]
-        y = data[2::DIMENSION+1]
+        x = data[1::DIMENSION + 1]
+        y = data[2::DIMENSION + 1]
         z = None
         if DIMENSION == 3:
-            z = data[3::DIMENSION+1]
+            z = data[3::DIMENSION + 1]
         if DIMENSION == 2:
             z = [0] * len(x)
-        tracks = [track for track in range(int(data[-1])+1)]
+        tracks = [track for track in range(int(data[-1]) + 1)]
 
         # normalise
         if self.normalize:
             raise NotImplementedError()
+
+        convert_list = []
+        for i in range(len(x)):
+            if DIMENSION == 3:
+                convert_list.append((x[i], y[i], z[i]))
+            if DIMENSION == 2:
+                convert_list.append((x[i], y[i]))
+
+        sorted_coords = sort_by_angle(convert_list)
+        labels = np.sort(labels)
+
+        if DIMENSION == 2:
+            x, y = zip(*sorted_coords)
+        else:
+            x, y, z = zip(*sorted_coords)
 
         # convert to tensors
         if self.to_tensor:
