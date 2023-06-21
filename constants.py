@@ -4,3 +4,7 @@ DIMENSION = 2 # dimensionality of data
 DATA_PATH = "output.txt"
 LABEL_PATH = "parameter.txt"
 BATCH_SIZE = 32
+EPOCHS = 50
+TRAIN = True
+PADDING_LEN = 512
+PAD_TOKEN = 50

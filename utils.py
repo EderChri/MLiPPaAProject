@@ -1,5 +1,9 @@
 import numpy as np
+import pandas as pd
 import torch
+
+from constants import PAD_TOKEN
+
 
 def cart2cyl(x, y, z=None):
     rho = np.sqrt(x ** 2 + y ** 2)
@@ -37,15 +41,26 @@ def custom_collate(batch):
             xs.append(b[1])
             ys.append(b[2])
             zs.append(b[3])
-            tracks.append(b[4])
-            labels.append(b[5])
+            labels.append(b[4])
 
     # Convert the lists to tensors, except for the event_id since it might not be a tensor
     xs = torch.stack(xs)
     ys = torch.stack(ys)
     zs = torch.stack(zs)
-    tracks = torch.stack(tracks)
     labels = torch.stack(labels)
 
     # Return the final processed batch
-    return event_ids, xs, ys, zs, tracks, labels
+    return event_ids, xs, ys, zs, labels
+
+
+def load_variable_len_data(path):
+    data = pd.read_fwf(path, header=None)
+    return data[0].str.split(',', expand=True)
+
+
+def create_mask_src(src):
+    masks = []
+    for sample in src:
+        mask = [0 if token == PAD_TOKEN else 1 for token in sample]
+        masks.append(mask)
+    return masks

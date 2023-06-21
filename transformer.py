@@ -42,6 +42,7 @@ class FittingTransformer(nn.Module):
     def forward(self,
                 x: Tensor,  # Separate x tensor
                 y: Tensor,  # Separate y tensor
+                mask: Tensor,
                 z: Optional[Tensor] = None,  # Separate z tensor; works with None
                 ):
         # Initialize a tensor of zeros with the same size as the x and y tensors when z is None
@@ -54,7 +55,7 @@ class FittingTransformer(nn.Module):
         # Linear projection of the input
         src_emb = self.proj_input(coords)
         # Transformer encoder
-        memory = self.transformer_encoder(src=src_emb)
+        memory = self.transformer_encoder(src=src_emb, mask=mask)
         memory = self.aggregator(memory.permute(0, 2, 1))
         memory = memory.squeeze(dim=2)
         # Dropout
