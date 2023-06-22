@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import torch
+from torch.nn.utils.rnn import pad_sequence
 
 from constants import PAD_TOKEN
 
@@ -31,7 +32,6 @@ def custom_collate(batch):
     xs = []
     ys = []
     zs = []
-    tracks = []
     labels = []
 
     for b in batch:
@@ -48,9 +48,15 @@ def custom_collate(batch):
     ys = torch.stack(ys)
     zs = torch.stack(zs)
     labels = torch.stack(labels)
+    x = torch.stack((xs,ys, zs),dim=1)
 
+    x_lens = [len(val) for val in x]
+    y_lens = [len(y) for y in labels]
+
+    x_pad = pad_sequence(x, batch_first=False, padding_value=PAD_TOKEN)
+    labels_pad = pad_sequence(labels, batch_first=False, padding_value=PAD_TOKEN)
     # Return the final processed batch
-    return event_ids, xs, ys, zs, labels
+    return event_ids, x_pad, labels_pad, x_lens, y_lens
 
 
 def load_variable_len_data(path):
@@ -58,9 +64,10 @@ def load_variable_len_data(path):
     return data[0].str.split(',', expand=True)
 
 
-def create_mask_src(src):
-    masks = []
-    for sample in src:
-        mask = [0 if token == PAD_TOKEN else 1 for token in sample]
-        masks.append(mask)
-    return masks
+def create_mask_src(src, device):
+    src_seq_len = src.shape[0]
+
+    src_mask = torch.zeros((src_seq_len, src_seq_len), device=device).type(torch.bool)
+    src_padding_mask = (src[:, :, 0] == PAD_TOKEN).transpose(0, 1)
+
+    return src_mask, src_padding_mask

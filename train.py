@@ -26,28 +26,28 @@ def train_epoch(model, optim, disable_tqdm, batch_size, loader):
     n_batches = int(math.ceil(len(loader.dataset) / batch_size))
     t = tqdm.tqdm(enumerate(loader), total=n_batches, disable=disable_tqdm)
     for i, data in t:
-        event_id, x, y, z, labels = data
+        event_id, x, labels, src_len, _ = data
         x = x.to(DEVICE)
-        y = y.to(DEVICE)
-        if z is not None:
-            z = z.to(DEVICE)
         if labels is not None:
             labels = labels.to(DEVICE)
 
-        masks = [create_mask_src(x), create_mask_src(y)]
+        src_mask, src_padding_mask = create_mask_src(x, DEVICE)
         # run model
-        if z is not None:
-            masks.append(create_mask_src(z))
-            masks = torch.tensor(masks)
-            pred = model(x, y, masks, z)
-        else:
-            masks = torch.tensor(masks)
-            pred = model(x, y, masks)
+        pred = model(x,src_mask,src_padding_mask)
 
         optim.zero_grad()
+        mask = (labels != PAD_TOKEN).float()
+        labels = labels * mask
+        print(mask.shape)
+        print(pred.shape)
+        pred = pred * mask
 
         # loss calculation
-        loss = loss_fn(pred, labels)
+        pred_packed = torch.nn.utils.rnn.pack_padded_sequence(pred, src_len, batch_first=False, enforce_sorted=False)
+        tgt_packed = torch.nn.utils.rnn.pack_padded_sequence(labels, src_len, batch_first=False, enforce_sorted=False)
+        loss = loss_fn(pred_packed.data, tgt_packed.data)
+        # loss calculation
+        #loss = loss_fn(pred, labels)
         loss.backward()  # compute gradients
 
         t.set_description("loss = %.8f" % loss.item())
@@ -67,16 +67,13 @@ def evaluate(model, disable_tqdm, batch_size, loader):
 
     with torch.no_grad():
         for i, data in t:
-            event_id, x, y, z, labels = data
+            event_id, x, labels = data
             x = x.to(DEVICE)
-            y = y.to(DEVICE)
-            if z is not None:
-                z = z.to(DEVICE)
             if labels is not None:
                 labels = labels.to(DEVICE)
 
             # run model
-            pred = model(x, y, z)
+            pred = model(x)
 
             loss = loss_fn(pred, labels)
             losses += loss.item()
@@ -156,11 +153,11 @@ if __name__ == '__main__':
     train_set, test_set = random_split(train_set_full, [train_len, test_len],
                                        generator=torch.Generator().manual_seed(7))
     train_loader = DataLoader(train_set, batch_size=BATCH_SIZE,
-                              num_workers=4, shuffle=True, collate_fn=custom_collate)
+                              num_workers=1, shuffle=True, collate_fn=custom_collate)
     valid_loader = DataLoader(val_set, batch_size=BATCH_SIZE,
-                              num_workers=4, shuffle=False, collate_fn=custom_collate)
+                              num_workers=1, shuffle=False, collate_fn=custom_collate)
     test_loader = DataLoader(test_set, batch_size=BATCH_SIZE,
-                             num_workers=4, shuffle=False, collate_fn=custom_collate)
+                             num_workers=1, shuffle=False, collate_fn=custom_collate)
 
     torch.manual_seed(7)  # for reproducibility
     DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -169,7 +166,7 @@ if __name__ == '__main__':
     transformer = FittingTransformer(num_encoder_layers=4,
                                      d_model=512,
                                      n_head=4,
-                                     input_size=3,
+                                     input_size=512,
                                      output_size=3,
                                      dim_feedforward=1)
     transformer = transformer.to(DEVICE)

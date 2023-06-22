@@ -40,27 +40,17 @@ class FittingTransformer(nn.Module):
         self.decoder.weight.data.uniform_(-init_range, init_range)
 
     def forward(self,
-                x: Tensor,  # Separate x tensor
-                y: Tensor,  # Separate y tensor
+                src: Tensor,
                 mask: Tensor,
-                z: Optional[Tensor] = None,  # Separate z tensor; works with None
-                ):
-        # Initialize a tensor of zeros with the same size as the x and y tensors when z is None
-        if z is None:
-            z = torch.zeros_like(x)
-
-        # Combine x, y, and z tensors into coords tensor of shape (batch_size, sequence_length, 3)
-        coords = torch.stack((x, y, z), dim=2)
-
+                src_padding_mask: Tensor):
         # Linear projection of the input
-        src_emb = self.proj_input(coords)
+        src_emb = self.proj_input(src)
         # Transformer encoder
-        memory = self.transformer_encoder(src=src_emb, mask=mask)
-        memory = self.aggregator(memory.permute(0, 2, 1))
-        memory = memory.squeeze(dim=2)
+        memory = self.transformer_encoder(src=src_emb, mask=mask,
+                                          src_key_padding_mask=src_padding_mask)
         # Dropout
         memory = self.dropout(memory)
         # Linear projection of the output
-        output = self.decoder(memory) #+ coords[:, :, :3]  # Learn residuals for x, y, z
+        output = self.decoder(memory)
 
         return output
