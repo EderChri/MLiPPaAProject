@@ -15,15 +15,17 @@ from utils import cart2cyl, sort_by_angle, load_variable_len_data
 
 class TrajectoryDataset(Dataset):
 
-    def __init__(self, root, labels, normalize=False, shuffle=False, to_tensor=True):
+    def __init__(self, root, labels, normalize=False, shuffle=False, to_tensor=True, test=False):
         self.root = root
-        self.labels = load_variable_len_data(labels)
-        #pd.read_csv(labels, header=None)
+        self.test = test
+        if not self.test:
+            self.labels = load_variable_len_data(labels)
+        else:
+            self.labels = None
         self.data = load_variable_len_data(self.root)
+
         if shuffle:
             self.data = self.data.sample(frac=1).reset_index(drop=True)
-        self.data = self.data.fillna(value=PAD_TOKEN)
-        self.labels = self.labels.fillna(value=PAD_TOKEN)
         self.total_events = len(self.data)
         self.normalize = normalize
         self.to_tensor = to_tensor
@@ -33,20 +35,23 @@ class TrajectoryDataset(Dataset):
 
     def __getitem__(self, idx):
         # load event
+        labels = None
         data = self.data.iloc[[idx]].values.tolist()[0]
         event_id = int(data[0])
-        event_labels = self.labels.iloc[[event_id]].values.tolist()[0]
+        if not self.test:
+            event_labels = self.labels.iloc[[event_id]].values.tolist()[0]
+            labels = event_labels[2::2]
+            labels = [float(value) for value in labels if value is not None]
+            labels = np.sort(labels)
 
-        labels = event_labels[2::2]
         x = data[1::DIMENSION + 1]
         y = data[2::DIMENSION + 1]
         z = None
-        x = [float(value) for value in x]
-        y = [float(value) for value in y]
-        labels = [float(value) for value in labels]
+        x = [float(value) for value in x if value is not None]
+        y = [float(value) for value in y if value is not None]
         if DIMENSION == 3:
             z = data[3::DIMENSION + 1]
-            z = [float(value) for value in z]
+            z = [float(value) for value in z if value is not None]
         if DIMENSION == 2:
             z = [PAD_TOKEN] * len(x)
 
@@ -62,7 +67,6 @@ class TrajectoryDataset(Dataset):
                 convert_list.append((x[i], y[i]))
 
         sorted_coords = sort_by_angle(convert_list)
-        labels = np.sort(labels)
 
         if DIMENSION == 2:
             x, y = zip(*sorted_coords)
@@ -71,15 +75,11 @@ class TrajectoryDataset(Dataset):
 
         # convert to tensors
         if self.to_tensor:
-            pad_x = PADDING_LEN - len(x)
-            pad_y = PADDING_LEN - len(y)
-            pad_z = PADDING_LEN - len(z)
-            pad_labels = PADDING_LEN - len(labels)
-
-            x = F.pad(torch.tensor(x).float(), pad=(0, pad_x), value=PAD_TOKEN)
-            y = F.pad(torch.tensor(y).float(), pad=(0, pad_y), value=PAD_TOKEN)
-            z = F.pad(torch.tensor(z).float(), pad=(0, pad_z), value=PAD_TOKEN)
-            labels = F.pad(torch.tensor(labels).float(), pad=(0, pad_labels), value=PAD_TOKEN)
+            x = torch.tensor(x).float()
+            y = torch.tensor(y).float()
+            z = torch.tensor(z).float()
+            if not self.test:
+                labels = torch.tensor(labels).float()
 
         del data
         return event_id, x, y, z, labels

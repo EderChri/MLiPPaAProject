@@ -8,7 +8,7 @@ from timeit import default_timer as timer
 from dataset import TrajectoryDataset
 from constants import *
 from transformer import FittingTransformer
-from utils import custom_collate, earth_mover_distance, create_mask_src
+from utils import custom_collate, earth_mover_distance, create_mask_src, create_output_pred_mask
 
 # manually specify the GPUs to use
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
@@ -18,67 +18,86 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 dataset = TrajectoryDataset(DATA_PATH, LABEL_PATH)
 
 
-# training function (to be called per epoch)
-def train_epoch(model, optim, disable_tqdm, batch_size, loader):
-    torch.set_grad_enabled(True)
-    model.train()
+def train_eval_inner(model, t, train=True, optim=None):
     losses = 0.
-    n_batches = int(math.ceil(len(loader.dataset) / batch_size))
-    t = tqdm.tqdm(enumerate(loader), total=n_batches, disable=disable_tqdm)
     for i, data in t:
-        event_id, x, labels, src_len, _ = data
+        event_id, x, src_len, labels, lbl_len = data
         x = x.to(DEVICE)
         if labels is not None:
             labels = labels.to(DEVICE)
 
         src_mask, src_padding_mask = create_mask_src(x, DEVICE)
         # run model
-        pred = model(x,src_mask,src_padding_mask)
+        pred = model(x, src_mask, src_padding_mask)
+        pred = pred.transpose(0, 1)
 
-        optim.zero_grad()
+        if train:
+            optim.zero_grad()
         mask = (labels != PAD_TOKEN).float()
+        padding_len = np.round(np.divide(src_len, NR_DETECTORS))
         labels = labels * mask
-        print(mask.shape)
-        print(pred.shape)
-        pred = pred * mask
-
+        pred_mask = create_output_pred_mask(pred, padding_len)
+        pred = pred * torch.tensor(pred_mask).float()
         # loss calculation
-        pred_packed = torch.nn.utils.rnn.pack_padded_sequence(pred, src_len, batch_first=False, enforce_sorted=False)
-        tgt_packed = torch.nn.utils.rnn.pack_padded_sequence(labels, src_len, batch_first=False, enforce_sorted=False)
+        pred_packed = torch.nn.utils.rnn.pack_padded_sequence(pred, padding_len, batch_first=False,
+                                                              enforce_sorted=False)
+        tgt_packed = torch.nn.utils.rnn.pack_padded_sequence(labels, padding_len, batch_first=False, enforce_sorted=False)
         loss = loss_fn(pred_packed.data, tgt_packed.data)
-        # loss calculation
-        #loss = loss_fn(pred, labels)
-        loss.backward()  # compute gradients
-
+        if train:
+            loss.backward()  # compute gradients
+            optim.step()  # backprop
         t.set_description("loss = %.8f" % loss.item())
-
-        optim.step()  # backprop
         losses += loss.item()
+    return losses
 
+
+# training function (to be called per epoch)
+def train_epoch(model, optim, disable_tqdm, batch_size, loader):
+    torch.set_grad_enabled(True)
+    model.train()
+    n_batches = int(math.ceil(len(loader.dataset) / batch_size))
+    t = tqdm.tqdm(enumerate(loader), total=n_batches, disable=disable_tqdm)
+    losses = train_eval_inner(model, t, train=True, optim=optim)
     return losses / len(loader)
 
 
 # test function
 def evaluate(model, disable_tqdm, batch_size, loader):
     model.eval()
-    losses = 0
     n_batches = int(math.ceil(len(loader.dataset) / batch_size))
     t = tqdm.tqdm(enumerate(loader), total=n_batches, disable=disable_tqdm)
 
     with torch.no_grad():
-        for i, data in t:
-            event_id, x, labels = data
-            x = x.to(DEVICE)
-            if labels is not None:
-                labels = labels.to(DEVICE)
-
-            # run model
-            pred = model(x)
-
-            loss = loss_fn(pred, labels)
-            losses += loss.item()
+        losses = train_eval_inner(model, t, train=False)
 
     return losses / len(loader)
+
+
+def predict(model, loader, disable_tqdm=False):
+    torch.set_grad_enabled(False)
+    model.eval()
+    n_batches = int(math.ceil(len(loader.dataset) / TEST_BATCH_SIZE))
+    t = tqdm.tqdm(enumerate(loader), total=n_batches, disable=disable_tqdm)
+    predictions = {}
+
+    for i, data in t:
+        event_id, x, src_len, _, _ = data
+        x = x.to(DEVICE)
+
+        src_mask, src_padding_mask = create_mask_src(x, DEVICE)
+        # run model
+        pred = model(x, src_mask, src_padding_mask)
+        pred = pred.transpose(0, 1)
+
+        padding_len = np.round(np.divide(src_len, 5))
+        pred_mask = create_output_pred_mask(pred, padding_len)
+        pred = pred * torch.tensor(pred_mask).float()
+
+        # Append predictions to the list
+        for i, e_id in enumerate(event_id):
+            predictions[e_id] = pred[:, i]
+
+    return predictions
 
 
 def train(t_loader, v_loader):
@@ -156,7 +175,7 @@ if __name__ == '__main__':
                               num_workers=1, shuffle=True, collate_fn=custom_collate)
     valid_loader = DataLoader(val_set, batch_size=BATCH_SIZE,
                               num_workers=1, shuffle=False, collate_fn=custom_collate)
-    test_loader = DataLoader(test_set, batch_size=BATCH_SIZE,
+    test_loader = DataLoader(test_set, batch_size=TEST_BATCH_SIZE,
                              num_workers=1, shuffle=False, collate_fn=custom_collate)
 
     torch.manual_seed(7)  # for reproducibility
@@ -164,10 +183,10 @@ if __name__ == '__main__':
 
     # Transformer model
     transformer = FittingTransformer(num_encoder_layers=4,
-                                     d_model=512,
+                                     d_model=64,
                                      n_head=4,
-                                     input_size=512,
-                                     output_size=3,
+                                     input_size=3,
+                                     output_size=20,
                                      dim_feedforward=1)
     transformer = transformer.to(DEVICE)
     print(transformer)
@@ -195,3 +214,5 @@ if __name__ == '__main__':
         count = checkpoint['count']
         print(f"Number of epochs trained: {epoch}")
         print(f"MSE: {evaluate(transformer, disable, BATCH_SIZE, test_loader)}")
+
+    print(predict(transformer, test_loader))

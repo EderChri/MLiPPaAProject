@@ -1,9 +1,10 @@
 import numpy as np
 import pandas as pd
 import torch
+from torch import nn
 from torch.nn.utils.rnn import pad_sequence
 
-from constants import PAD_TOKEN
+from constants import PAD_TOKEN, PADDING_LEN_INPUT, PADDING_LEN_LBL
 
 
 def cart2cyl(x, y, z=None):
@@ -29,34 +30,36 @@ def earth_mover_distance(y_true, y_pred):
 
 def custom_collate(batch):
     event_ids = []
-    xs = []
-    ys = []
-    zs = []
+    xs, ys, zs = [], [], []
     labels = []
+    labels_pad, lbl_lens = None, None
 
     for b in batch:
-        # Assuming z (b[3]) is the variable that can be None
-        if b[3] is not None:
-            event_ids.append(b[0])
-            xs.append(b[1])
-            ys.append(b[2])
-            zs.append(b[3])
+        event_ids.append(b[0])
+        xs.append(b[1])
+        ys.append(b[2])
+        zs.append(b[3])
+        if b[4] is not None:
             labels.append(b[4])
 
+    x_lens = [len(val) for val in xs]
+    # In case this is not a test data set
+    if len(labels) > 0:
+        lbl_lens = [len(lbl) for lbl in labels]
+        labels[0] = nn.ConstantPad1d((0, PADDING_LEN_LBL - labels[0].shape[0]), PAD_TOKEN)(labels[0])
+        labels_pad = pad_sequence(labels, batch_first=False, padding_value=PAD_TOKEN)
     # Convert the lists to tensors, except for the event_id since it might not be a tensor
-    xs = torch.stack(xs)
-    ys = torch.stack(ys)
-    zs = torch.stack(zs)
-    labels = torch.stack(labels)
-    x = torch.stack((xs,ys, zs),dim=1)
+    xs[0] = nn.ConstantPad1d((0, PADDING_LEN_INPUT - xs[0].shape[0]), PAD_TOKEN)(xs[0])
+    ys[0] = nn.ConstantPad1d((0, PADDING_LEN_INPUT - ys[0].shape[0]), PAD_TOKEN)(ys[0])
+    zs[0] = nn.ConstantPad1d((0, PADDING_LEN_INPUT - zs[0].shape[0]), PAD_TOKEN)(zs[0])
 
-    x_lens = [len(val) for val in x]
-    y_lens = [len(y) for y in labels]
+    xs_pad = pad_sequence(xs, batch_first=False, padding_value=PAD_TOKEN)
+    ys_pad = pad_sequence(ys, batch_first=False, padding_value=PAD_TOKEN)
+    zs_pad = pad_sequence(zs, batch_first=False, padding_value=PAD_TOKEN)
+    x = torch.stack((xs_pad, ys_pad, zs_pad), dim=1)
 
-    x_pad = pad_sequence(x, batch_first=False, padding_value=PAD_TOKEN)
-    labels_pad = pad_sequence(labels, batch_first=False, padding_value=PAD_TOKEN)
     # Return the final processed batch
-    return event_ids, x_pad, labels_pad, x_lens, y_lens
+    return event_ids, x.transpose(1, 2), x_lens, labels_pad, lbl_lens
 
 
 def load_variable_len_data(path):
@@ -66,8 +69,16 @@ def load_variable_len_data(path):
 
 def create_mask_src(src, device):
     src_seq_len = src.shape[0]
-
+    padding_vector = torch.full((src_seq_len,), PAD_TOKEN)
     src_mask = torch.zeros((src_seq_len, src_seq_len), device=device).type(torch.bool)
-    src_padding_mask = (src[:, :, 0] == PAD_TOKEN).transpose(0, 1)
+    src_padding_mask = (src.transpose(0, 2) == padding_vector).all(dim=0)
 
     return src_mask, src_padding_mask
+
+
+def create_output_pred_mask(tensor, indices):
+    indices_arr = np.array(indices)
+    row_indices = np.arange(tensor.shape[1])[:, np.newaxis]
+    col_indices = np.arange(tensor.shape[0])
+    mask = col_indices < indices_arr[row_indices]
+    return mask.T

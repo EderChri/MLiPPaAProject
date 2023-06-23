@@ -48,6 +48,7 @@ class FittingTransformer(nn.Module):
         # Transformer encoder
         memory = self.transformer_encoder(src=src_emb, mask=mask,
                                           src_key_padding_mask=src_padding_mask)
+        memory = torch.mean(memory, dim=0)
         # Dropout
         memory = self.dropout(memory)
         # Linear projection of the output
