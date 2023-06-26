@@ -9,14 +9,14 @@ from dataset import TrajectoryDataset
 from constants import *
 from transformer import FittingTransformer
 from utils import custom_collate, earth_mover_distance, create_mask_src, create_output_pred_mask
+import wandb
 
 # manually specify the GPUs to use
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-
+DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # training dataset
 dataset = TrajectoryDataset(DATA_PATH, LABEL_PATH)
-
 
 def train_eval_inner(model, t, train=True, optim=None):
     losses = 0.
@@ -40,7 +40,7 @@ def train_eval_inner(model, t, train=True, optim=None):
             pred_mask = create_output_pred_mask(pred, padding_len)
             pred = pred * torch.tensor(pred_mask).float()
             # loss calculation
-            loss = loss_fn(pred, labels)
+            loss = LOSS_FN(pred, labels)
 
         if DIMENSION == 3:
             pred = pred[0].transpose(0, 1), pred[1].transpose(0, 1)
@@ -51,7 +51,7 @@ def train_eval_inner(model, t, train=True, optim=None):
             pred = pred.transpose(0, 2)
             pred = pred.transpose(1, 0)
             # loss calculation
-            loss = loss_fn(pred, labels)
+            loss = LOSS_FN(pred, labels)
 
         if train:
             loss.backward()  # compute gradients
@@ -118,7 +118,7 @@ def predict(model, loader, disable_tqdm=False):
     return predictions
 
 
-def train(t_loader, v_loader):
+def train(t_loader, v_loader, transformer, optimizer, batch_size):
     train_losses, val_losses = [], []
     min_val_loss = np.inf
     disable, load = False, False
@@ -140,14 +140,15 @@ def train(t_loader, v_loader):
 
     for epoch in range(epoch, EPOCHS):
         start_time = timer()
-        train_loss = train_epoch(transformer, optimizer, disable, BATCH_SIZE, t_loader)
+        train_loss = train_epoch(transformer, optimizer, disable, batch_size, t_loader)
         end_time = timer()
-        val_loss = evaluate(transformer, disable, BATCH_SIZE, v_loader)
+        val_loss = evaluate(transformer, disable, batch_size, v_loader)
         print((f"Epoch: {epoch}, Train loss: {train_loss:.8f}, "
                f"Val loss: {val_loss:.8f}, "f"Epoch time = {(end_time - start_time):.3f}s"))
 
         train_losses.append(train_loss)
         val_losses.append(val_loss)
+        wandb.log({"train_loss": train_loss, "val_loss": val_loss})
 
         if val_loss < min_val_loss:
             min_val_loss = val_loss
@@ -173,12 +174,14 @@ def train(t_loader, v_loader):
             }, "models/transformer_encoder_last")
             count += 1
 
-        # if count >= EARLY_STOPPING:
-        #     print("Early stopping...")
-        #     break
+        if count >= EARLY_STOPPING:
+            print("Early stopping...")
+            break
 
 
-if __name__ == '__main__':
+def fine_tune():
+    wandb.init()
+    torch.manual_seed(7)  # for reproducibility
     # split dataset into training and validation sets
     full_len = len(dataset)
     train_full_len = int(full_len * 0.8)
@@ -189,23 +192,20 @@ if __name__ == '__main__':
                                             generator=torch.Generator().manual_seed(7))
     train_set, test_set = random_split(train_set_full, [train_len, test_len],
                                        generator=torch.Generator().manual_seed(7))
-    train_loader = DataLoader(train_set, batch_size=BATCH_SIZE,
+    train_loader = DataLoader(train_set, batch_size=wandb.config.batch_size,
                               num_workers=1, shuffle=True, collate_fn=custom_collate)
-    valid_loader = DataLoader(val_set, batch_size=BATCH_SIZE,
+    valid_loader = DataLoader(val_set, batch_size=wandb.config.batch_size,
                               num_workers=1, shuffle=False, collate_fn=custom_collate)
     test_loader = DataLoader(test_set, batch_size=TEST_BATCH_SIZE,
                              num_workers=1, shuffle=False, collate_fn=custom_collate)
-
-    torch.manual_seed(7)  # for reproducibility
-    DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
     # Transformer model
-    transformer = FittingTransformer(num_encoder_layers=4,
-                                     d_model=64,
-                                     n_head=4,
+    transformer = FittingTransformer(num_encoder_layers=wandb.config.num_encoder_layers,
+                                     d_model=wandb.config.d_model,
+                                     n_head=wandb.config.head,
                                      input_size=3,
                                      output_size=20,
-                                     dim_feedforward=1)
+                                     dim_feedforward=wandb.config.dim_feedforward,
+                                     dropout=wandb.config.dropout)
     transformer = transformer.to(DEVICE)
     print(transformer)
 
@@ -213,11 +213,10 @@ if __name__ == '__main__':
     print("Total trainable params: {}".format(pytorch_total_params))
 
     # loss and optimiser
-    loss_fn = torch.nn.MSELoss()  # earth_mover_distance  # EMD loss
     optimizer = torch.optim.Adam(transformer.parameters(), lr=1e-4)
 
     if TRAIN:
-        train(train_loader, valid_loader)
+        train(train_loader, valid_loader, transformer, optimizer, wandb.config.batch_size)
     else:
         disable, load = False, False
         epoch, count = 0, 0
@@ -231,6 +230,10 @@ if __name__ == '__main__':
         min_val_loss = min(val_losses)
         count = checkpoint['count']
         print(f"Number of epochs trained: {epoch}")
-        print(f"MSE: {evaluate(transformer, disable, BATCH_SIZE, test_loader)}")
+        print(f"MSE: {evaluate(transformer, disable, wandb.config.batch_size, test_loader)}")
 
-    print(predict(transformer, test_loader))
+
+if __name__ == '__main__':
+    wandb.login()
+    sweep_id = wandb.sweep(sweep=SWEEP_CONFIGURATION, project="ml-in-particle-physics-and-astronomy")
+    wandb.agent(sweep_id, count=35, function=fine_tune)
