@@ -1,16 +1,12 @@
 """
 Dataset module.
 """
-from dataclasses import dataclass
-
 import numpy as np
 import torch
 from torch.utils.data import Dataset
-import torch.nn.functional as F
-import pandas as pd
 
 from constants import *
-from utils import cart2cyl, sort_by_angle, load_variable_len_data
+from utils import sort_by_angle, load_variable_len_data
 
 
 class TrajectoryDataset(Dataset):
@@ -41,7 +37,17 @@ class TrajectoryDataset(Dataset):
         if not self.test:
             event_labels = self.labels.iloc[[event_id]].values.tolist()[0]
             labels = event_labels[2::2]
-            labels = [float(value) for value in labels if value is not None]
+            if DIMENSION == 2:
+                labels = [float(value) for value in labels if value is not None]
+            if DIMENSION == 3:
+                tmp_lbls = []
+                for angle_list in labels:
+                    if angle_list is None:
+                        continue
+                    angle_list = angle_list.split(';')
+                    tmp_lbls.append((float(angle_list[0]), float(angle_list[1])))
+                labels = tmp_lbls
+
             labels = np.sort(labels)
 
         x = data[1::DIMENSION + 1]

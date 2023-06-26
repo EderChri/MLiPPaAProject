@@ -68,10 +68,12 @@ def generate_data(nr_events=50_000, max_nr_tracks=3, noise=0.1):
         for track in range(np.random.randint(2, max_nr_tracks)):
             if constants.DIMENSION == 2:
                 track_angle = random.uniform(-np.pi, np.pi)
+                track_angle_print = track_angle
             if constants.DIMENSION == 3:
                 track_angle = [random.uniform(-np.pi, np.pi), random.uniform(-np.pi, np.pi)]
+                track_angle_print = f"{track_angle[0]};{track_angle[1]}"
             parameter_dict[event].append(track)
-            parameter_dict[event].append(track_angle)
+            parameter_dict[event].append(track_angle_print)
             track_vector = 5 * angle_to_vector(track_angle)
             for detector, rad in enumerate(detector_rad):
                 if constants.DIMENSION == 2:
@@ -127,8 +129,9 @@ def plot_histogram(path="parameter.txt"):
 if __name__ == '__main__':  #
     np.random.seed(42)
     # data, parameter = generate_2Ddata(nr_events=500, max_nr_tracks=20)
-    data, parameter = generate_data(nr_events=500, max_nr_tracks=20)
+    data, parameter = generate_data(nr_events=constants.NR_EVENTS, max_nr_tracks=20)
     print_data(data)
     print_data(parameter, "parameter.txt", parameter=True)
-    plot_first_row("output.txt")
-    plot_histogram()
+    if constants.DIMENSION == 2:
+        plot_first_row("output.txt")
+        plot_histogram()

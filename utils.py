@@ -4,7 +4,7 @@ import torch
 from torch import nn
 from torch.nn.utils.rnn import pad_sequence
 
-from constants import PAD_TOKEN, PADDING_LEN_INPUT, PADDING_LEN_LBL
+from constants import PAD_TOKEN, PADDING_LEN_INPUT, PADDING_LEN_LBL, DIMENSION
 
 
 def cart2cyl(x, y, z=None):
@@ -46,7 +46,10 @@ def custom_collate(batch):
     # In case this is not a test data set
     if len(labels) > 0:
         lbl_lens = [len(lbl) for lbl in labels]
-        labels[0] = nn.ConstantPad1d((0, PADDING_LEN_LBL - labels[0].shape[0]), PAD_TOKEN)(labels[0])
+        if DIMENSION == 2:
+            labels[0] = nn.ConstantPad1d((0, PADDING_LEN_LBL - labels[0].shape[0]), PAD_TOKEN)(labels[0])
+        if DIMENSION == 3:
+            labels[0] = nn.ConstantPad2d((0, 0, 0, PADDING_LEN_LBL - labels[0].shape[0]), PAD_TOKEN)(labels[0])
         labels_pad = pad_sequence(labels, batch_first=False, padding_value=PAD_TOKEN)
     # Convert the lists to tensors, except for the event_id since it might not be a tensor
     xs[0] = nn.ConstantPad1d((0, PADDING_LEN_INPUT - xs[0].shape[0]), PAD_TOKEN)(xs[0])

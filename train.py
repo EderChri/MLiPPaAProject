@@ -29,20 +29,30 @@ def train_eval_inner(model, t, train=True, optim=None):
         src_mask, src_padding_mask = create_mask_src(x, DEVICE)
         # run model
         pred = model(x, src_mask, src_padding_mask)
-        pred = pred.transpose(0, 1)
-
         if train:
             optim.zero_grad()
         mask = (labels != PAD_TOKEN).float()
         padding_len = np.round(np.divide(src_len, NR_DETECTORS))
         labels = labels * mask
-        pred_mask = create_output_pred_mask(pred, padding_len)
-        pred = pred * torch.tensor(pred_mask).float()
-        # loss calculation
-        pred_packed = torch.nn.utils.rnn.pack_padded_sequence(pred, padding_len, batch_first=False,
-                                                              enforce_sorted=False)
-        tgt_packed = torch.nn.utils.rnn.pack_padded_sequence(labels, padding_len, batch_first=False, enforce_sorted=False)
-        loss = loss_fn(pred_packed.data, tgt_packed.data)
+
+        if DIMENSION == 2:
+            pred = pred.transpose(0, 1)
+            pred_mask = create_output_pred_mask(pred, padding_len)
+            pred = pred * torch.tensor(pred_mask).float()
+            # loss calculation
+            loss = loss_fn(pred, labels)
+
+        if DIMENSION == 3:
+            pred = pred[0].transpose(0, 1), pred[1].transpose(0, 1)
+            pred = torch.stack([pred[0], pred[1]])
+            for slice_ind in range(pred.shape[0]):
+                slice_mask = create_output_pred_mask(pred[slice_ind, :, :], padding_len)
+                pred[slice_ind, :, :] = pred[slice_ind, :, :] * torch.tensor(slice_mask).float()
+            pred = pred.transpose(0, 2)
+            pred = pred.transpose(1, 0)
+            # loss calculation
+            loss = loss_fn(pred, labels)
+
         if train:
             loss.backward()  # compute gradients
             optim.step()  # backprop
@@ -87,11 +97,19 @@ def predict(model, loader, disable_tqdm=False):
         src_mask, src_padding_mask = create_mask_src(x, DEVICE)
         # run model
         pred = model(x, src_mask, src_padding_mask)
-        pred = pred.transpose(0, 1)
-
         padding_len = np.round(np.divide(src_len, 5))
-        pred_mask = create_output_pred_mask(pred, padding_len)
-        pred = pred * torch.tensor(pred_mask).float()
+        if DIMENSION == 2:
+            pred = pred.transpose(0, 1)
+            pred_mask = create_output_pred_mask(pred, padding_len)
+            pred = pred * torch.tensor(pred_mask).float()
+        if DIMENSION == 3:
+            pred = pred[0].transpose(0, 1), pred[1].transpose(0, 1)
+            pred = torch.stack([pred[0], pred[1]])
+            for slice_ind in range(pred.shape[0]):
+                slice_mask = create_output_pred_mask(pred[slice_ind, :, :], padding_len)
+                pred[slice_ind, :, :] = pred[slice_ind, :, :] * torch.tensor(slice_mask).float()
+            pred = pred.transpose(0, 2)
+            pred = pred.transpose(1, 0)
 
         # Append predictions to the list
         for i, e_id in enumerate(event_id):
