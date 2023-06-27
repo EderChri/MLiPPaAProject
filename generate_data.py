@@ -1,8 +1,6 @@
 import random
 
 import numpy as np
-import pandas as pd
-from matplotlib.ticker import MaxNLocator
 from shapely.geometry import Point, LineString
 import matplotlib.pyplot as plt
 from tqdm import tqdm
@@ -39,7 +37,7 @@ def angle_to_vector(angle_in_radians):
         return np.array([x, y, z])
 
 
-def print_data(dict, output="output.txt", parameter=False):
+def print_data(dict, output=f"output_{constants.DIMENSION}d.txt", parameter=False):
     with open(output, "w") as file:
         for key, value in dict.items():
             if not parameter:
@@ -92,7 +90,7 @@ def plot_circle(center, radius, color='blue', alpha=0.5, ax=None):
     ax.add_artist(circle)
 
 
-def plot_first_row(data="output.txt"):
+def plot_first_row(data=f"output_{constants.DIMENSION}d.txt"):
     circle_center = (0, 0)
     circle_radii = [1, 2, 3, 4, 5]
 
@@ -116,7 +114,7 @@ def plot_first_row(data="output.txt"):
     plt.show()
 
 
-def plot_histogram(path="parameter.txt"):
+def plot_histogram(path=f"parameter_{constants.DIMENSION}d.txt"):
     data = load_variable_len_data(path)
     plot_data = data.iloc[:, 2].tolist()
     for i in range(4, (len(data.columns)) - 1, 2):
@@ -128,10 +126,9 @@ def plot_histogram(path="parameter.txt"):
 
 if __name__ == '__main__':  #
     np.random.seed(42)
-    # data, parameter = generate_2Ddata(nr_events=500, max_nr_tracks=20)
     data, parameter = generate_data(nr_events=constants.NR_EVENTS, max_nr_tracks=20)
     print_data(data)
-    print_data(parameter, "parameter.txt", parameter=True)
+    print_data(parameter, f"parameter_{constants.DIMENSION}d.txt", parameter=True)
     if constants.DIMENSION == 2:
-        plot_first_row("output.txt")
+        plot_first_row(f"output_{constants.DIMENSION}d.txt")
         plot_histogram()

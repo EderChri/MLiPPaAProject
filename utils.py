@@ -66,9 +66,16 @@ def custom_collate(batch):
 
 
 def load_variable_len_data(path):
-    data = pd.read_fwf(path, header=None)
-    return data[0].str.split(',', expand=True)
 
+    # adapted from
+    # https://stackoverflow.com/questions/27020216/import-csv-with-different-number-of-columns-per-row-using-pandas
+    with open(path, 'r') as f:
+        col_count = [len(l.split(",")) for l in f.readlines()]
+
+    column_names = [i for i in range(0, max(col_count))]
+
+    data = pd.read_csv(path, header=None, delimiter=",", names=column_names)
+    return data
 
 def create_mask_src(src, device):
     src_seq_len = src.shape[0]

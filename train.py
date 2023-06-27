@@ -126,7 +126,7 @@ def train(t_loader, v_loader, transformer, optimizer, batch_size):
 
     if load:
         print("Loading saved model...")
-        checkpoint = torch.load("models/transformer_encoder_generic_last")
+        checkpoint = torch.load(f"models/transformer_encoder_last_{DIMENSION}d")
         transformer.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         epoch = checkpoint['epoch'] + 1
@@ -160,7 +160,7 @@ def train(t_loader, v_loader, transformer, optimizer, batch_size):
                 'train_losses': train_losses,
                 'val_losses': val_losses,
                 'count': count,
-            }, "models/transformer_encoder_best")
+            }, f"models/transformer_encoder_best_{DIMENSION}d")
             count = 0
         else:
             print("Saving last model with val_loss: {}".format(val_loss))
@@ -171,7 +171,7 @@ def train(t_loader, v_loader, transformer, optimizer, batch_size):
                 'train_losses': train_losses,
                 'val_losses': val_losses,
                 'count': count,
-            }, "models/transformer_encoder_last")
+            }, f"models/transformer_encoder_last_{DIMENSION}d")
             count += 1
 
         if count >= EARLY_STOPPING:
@@ -221,7 +221,7 @@ def fine_tune():
         disable, load = False, False
         epoch, count = 0, 0
         print("Loading saved model...")
-        checkpoint = torch.load("models/transformer_encoder_last")
+        checkpoint = torch.load(f"models/transformer_encoder_last_{DIMENSION}d")
         transformer.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         epoch = checkpoint['epoch'] + 1

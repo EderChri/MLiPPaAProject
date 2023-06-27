@@ -1,6 +1,8 @@
 """
 Dataset module.
 """
+import math
+
 import numpy as np
 import torch
 from torch.utils.data import Dataset
@@ -38,11 +40,11 @@ class TrajectoryDataset(Dataset):
             event_labels = self.labels.iloc[[event_id]].values.tolist()[0]
             labels = event_labels[2::2]
             if DIMENSION == 2:
-                labels = [float(value) for value in labels if value is not None]
+                labels = [float(value) for value in labels if not math.isnan(value)]
             if DIMENSION == 3:
                 tmp_lbls = []
                 for angle_list in labels:
-                    if angle_list is None:
+                    if not isinstance(angle_list, str):
                         continue
                     angle_list = angle_list.split(';')
                     tmp_lbls.append((float(angle_list[0]), float(angle_list[1])))
@@ -53,11 +55,11 @@ class TrajectoryDataset(Dataset):
         x = data[1::DIMENSION + 1]
         y = data[2::DIMENSION + 1]
         z = None
-        x = [float(value) for value in x if value is not None]
-        y = [float(value) for value in y if value is not None]
+        x = [float(value) for value in x if not math.isnan(value)]
+        y = [float(value) for value in y if not math.isnan(value)]
         if DIMENSION == 3:
             z = data[3::DIMENSION + 1]
-            z = [float(value) for value in z if value is not None]
+            z = [float(value) for value in z if not math.isnan(value)]
         if DIMENSION == 2:
             z = [PAD_TOKEN] * len(x)
 

@@ -2,17 +2,17 @@ from torch import nn
 
 DETECTOR_RADII = [1, 2, 3, 4, 5]
 NR_DETECTORS = len(DETECTOR_RADII)
-DIMENSION = 2 # dimensionality of data
-DATA_PATH = "output.txt"
-LABEL_PATH = "parameter.txt"
+DIMENSION = 2  # dimensionality of data
+DATA_PATH = f"output_{DIMENSION}d.txt"
+LABEL_PATH = f"parameter_{DIMENSION}d.txt"
 BATCH_SIZE = 32
 TEST_BATCH_SIZE = 2
-EPOCHS = 50
+EPOCHS = 100
 TRAIN = True
 PADDING_LEN_INPUT = 100
 PADDING_LEN_LBL = 20
 PAD_TOKEN = 50
-NR_EVENTS = 500
+NR_EVENTS = 50000
 EARLY_STOPPING = 5
 LOSS_FN = nn.MSELoss()
 SWEEP_CONFIGURATION = {
@@ -21,7 +21,7 @@ SWEEP_CONFIGURATION = {
     'metric': {
         'goal': 'minimize',
         'name': 'val_loss'
-        },
+    },
     'parameters': {
         'batch_size': {'values': [32, 64, 128, 256]},
         'lr': {'max': 0.001, 'min': 0.00001},
