@@ -18,6 +18,7 @@ DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # training dataset
 dataset = TrajectoryDataset(DATA_PATH, LABEL_PATH)
 
+
 def train_eval_inner(model, t, train=True, optim=None):
     losses = 0.
     for i, data in t:
@@ -126,7 +127,7 @@ def train(t_loader, v_loader, transformer, optimizer, batch_size):
 
     if load:
         print("Loading saved model...")
-        checkpoint = torch.load(f"models/transformer_encoder_last_{DIMENSION}d")
+        checkpoint = torch.load(f"models/transformer_encoder_last_{DIMENSION}d_{wandb.run.name}")
         transformer.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         epoch = checkpoint['epoch'] + 1
@@ -148,7 +149,7 @@ def train(t_loader, v_loader, transformer, optimizer, batch_size):
 
         train_losses.append(train_loss)
         val_losses.append(val_loss)
-        wandb.log({"train_loss": train_loss, "val_loss": val_loss})
+        wandb.log({"train_loss": train_loss, "val_loss": val_loss, "dim": DIMENSION})
 
         if val_loss < min_val_loss:
             min_val_loss = val_loss
@@ -160,7 +161,7 @@ def train(t_loader, v_loader, transformer, optimizer, batch_size):
                 'train_losses': train_losses,
                 'val_losses': val_losses,
                 'count': count,
-            }, f"models/transformer_encoder_best_{DIMENSION}d")
+            }, f"models/transformer_encoder_best_{DIMENSION}d_{wandb.run.name}")
             count = 0
         else:
             print("Saving last model with val_loss: {}".format(val_loss))
@@ -171,7 +172,7 @@ def train(t_loader, v_loader, transformer, optimizer, batch_size):
                 'train_losses': train_losses,
                 'val_losses': val_losses,
                 'count': count,
-            }, f"models/transformer_encoder_last_{DIMENSION}d")
+            }, f"models/transformer_encoder_last_{DIMENSION}d_{wandb.run.name}")
             count += 1
 
         if count >= EARLY_STOPPING:
@@ -236,4 +237,4 @@ def fine_tune():
 if __name__ == '__main__':
     wandb.login()
     sweep_id = wandb.sweep(sweep=SWEEP_CONFIGURATION, project="ml-in-particle-physics-and-astronomy")
-    wandb.agent(sweep_id, count=35, function=fine_tune)
+    wandb.agent(sweep_id, count=10, function=fine_tune)

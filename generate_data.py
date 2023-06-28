@@ -19,8 +19,8 @@ def circle_line_intersection(circle_center, circle_radius, line_point1, line_poi
 def sphere_line_intersection(sphere_center, sphere_radius, line_point1, line_point2):
     sphere = Sphere(sphere_center, sphere_radius)
     line = Line(line_point1, line_point2)
-    intersection, _ = sphere.intersect_line(line)
-    return intersection
+    intersection1, intersection2 = sphere.intersect_line(line)
+    return intersection1, intersection2
 
 
 def angle_to_vector(angle_in_radians):
@@ -64,6 +64,9 @@ def generate_data(nr_events=50_000, max_nr_tracks=3, noise=0.1):
         event_dict[event] = [event]
         parameter_dict[event] = []
         for track in range(np.random.randint(2, max_nr_tracks)):
+            random_index = 0
+            if .5 < random.random():
+                random_index = 1
             if constants.DIMENSION == 2:
                 track_angle = random.uniform(-np.pi, np.pi)
                 track_angle_print = track_angle
@@ -77,7 +80,7 @@ def generate_data(nr_events=50_000, max_nr_tracks=3, noise=0.1):
                 if constants.DIMENSION == 2:
                     detector_intersect[track] = circle_line_intersection(origin, rad, origin, track_vector)
                 if constants.DIMENSION == 3:
-                    detector_intersect[track] = sphere_line_intersection(origin, rad, origin, track_vector)
+                    detector_intersect[track] = sphere_line_intersection(origin, rad, origin, track_vector)[random_index]
                     event_dict[event].append(add_noise(detector_intersect[track][2], noise))
                 event_dict[event].append(add_noise(detector_intersect[track][0], noise))
                 event_dict[event].append(add_noise(detector_intersect[track][1], noise))
