@@ -1,20 +1,34 @@
 from torch import nn
 
-DETECTOR_RADII = [1, 2, 3, 4, 5]
-NR_DETECTORS = len(DETECTOR_RADII)
-DIMENSION = 2  # dimensionality of data
+DIMENSION = 3  # dimensionality of data
+RANDOM_SEARCH = False  # Trains single model or evaluates existing model on test set when False depending on TRAIN
+TRAIN = True  # Loads model and evaluates on test set when False
 DATA_PATH = f"output_{DIMENSION}d.txt"
 LABEL_PATH = f"parameter_{DIMENSION}d.txt"
-BATCH_SIZE = 32
 TEST_BATCH_SIZE = 2
 EPOCHS = 100
-TRAIN = True
 PADDING_LEN_INPUT = 100
 PADDING_LEN_LBL = 20
 PAD_TOKEN = 50
-NR_EVENTS = 50000
 EARLY_STOPPING = 5
 LOSS_FN = nn.MSELoss()
+# Only relevant for data generation
+NR_EVENTS = 50000  # number of events to produce
+DETECTOR_RADII = [1, 2, 3, 4, 5]
+NR_DETECTORS = len(DETECTOR_RADII)
+MAX_NR_TRACKS = 20  # maximal number of tracks per event
+MIN_NR_TRACKS = 2  # minimal number of tracks per event
+# Only relevant for loading models or training a specific one
+## For loading these parameters need to be set to the same values as they were during training!
+MODEL_NAME = "transformer_encoder_best_3d_baseline"
+BATCH_SIZE = 256
+ENCODER_LAYERS = 1
+D_MODEL = 32
+HEAD = 1
+DIM_FEEDFORWARD = 1
+DROPOUT = 0.1
+# Only relevant if random search is true
+# Sweep configuration for wandb
 SWEEP_CONFIGURATION = {
     'method': 'random',
     'name': 'sweep',
