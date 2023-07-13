@@ -2,7 +2,7 @@ from torch import nn
 
 DETECTOR_RADII = [1, 2, 3, 4, 5]
 NR_DETECTORS = len(DETECTOR_RADII)
-DIMENSION = 3  # dimensionality of data
+DIMENSION = 2  # dimensionality of data
 DATA_PATH = f"output_{DIMENSION}d.txt"
 LABEL_PATH = f"parameter_{DIMENSION}d.txt"
 BATCH_SIZE = 32

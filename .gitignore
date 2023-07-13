@@ -6,7 +6,5 @@
 # Datasource local storage ignored files
 /dataSources/
 /dataSources.local.xml
-<<<<<<< HEAD
-=======
 /venv/
->>>>>>> a2a4d2084f16391b75f363ef40002884ce90305f
+/.idea/

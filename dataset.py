@@ -13,7 +13,7 @@ from utils import sort_by_angle, load_variable_len_data
 
 class TrajectoryDataset(Dataset):
 
-    def __init__(self, root, labels, normalize=False, shuffle=False, to_tensor=True, test=False):
+    def __init__(self, root, labels, shuffle=False, to_tensor=True, test=False):
         self.root = root
         self.test = test
         if not self.test:
@@ -25,7 +25,6 @@ class TrajectoryDataset(Dataset):
         if shuffle:
             self.data = self.data.sample(frac=1).reset_index(drop=True)
         self.total_events = len(self.data)
-        self.normalize = normalize
         self.to_tensor = to_tensor
 
     def __len__(self):
@@ -62,10 +61,6 @@ class TrajectoryDataset(Dataset):
             z = [float(value) for value in z if not math.isnan(value)]
         if DIMENSION == 2:
             z = [PAD_TOKEN] * len(x)
-
-        # normalise
-        if self.normalize:
-            raise NotImplementedError()
 
         convert_list = []
         for i in range(len(x)):

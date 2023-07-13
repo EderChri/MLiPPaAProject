@@ -23,11 +23,6 @@ def sort_by_angle(cartesian_coords):
     return sorted_cartesian_coords
 
 
-def earth_mover_distance(y_true, y_pred):
-    distance = torch.square(torch.cumsum(y_true, dim=-1) - torch.cumsum(y_pred, dim=-1))
-    return torch.mean(torch.mean(distance, dim=tuple(range(1, distance.ndim))))
-
-
 def custom_collate(batch):
     event_ids = []
     xs, ys, zs = [], [], []
@@ -66,7 +61,6 @@ def custom_collate(batch):
 
 
 def load_variable_len_data(path):
-
     # adapted from
     # https://stackoverflow.com/questions/27020216/import-csv-with-different-number-of-columns-per-row-using-pandas
     with open(path, 'r') as f:
@@ -76,6 +70,7 @@ def load_variable_len_data(path):
 
     data = pd.read_csv(path, header=None, delimiter=",", names=column_names)
     return data
+
 
 def create_mask_src(src, device):
     src_seq_len = src.shape[0]

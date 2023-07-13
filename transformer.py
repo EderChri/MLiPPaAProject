@@ -20,8 +20,7 @@ class FittingTransformer(nn.Module):
                  input_size: int,  # size of each item in the input sequence
                  output_size: int,  # size of each item in the output sequence
                  dim_feedforward: int = 512,  # dimension of the feedforward network of the Transformer
-                 dropout: float = 0.1,  # dropout value
-                 seq_len: int = 15):
+                 dropout: float = 0.1):  # dropout value
         super(FittingTransformer, self).__init__()
         encoder_layers = TransformerEncoderLayer(d_model=d_model,
                                                  nhead=n_head,
@@ -29,7 +28,6 @@ class FittingTransformer(nn.Module):
                                                  dropout=dropout)
         self.transformer_encoder = TransformerEncoder(encoder_layers, num_encoder_layers)
         self.proj_input = nn.Linear(input_size, d_model)
-        self.aggregator = nn.Linear(seq_len, 1)
         self.decoder_angle1 = nn.Linear(d_model, output_size)
         self.decoder_angle2 = nn.Linear(d_model, output_size)
         self.dropout = nn.Dropout(dropout)

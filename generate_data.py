@@ -51,7 +51,7 @@ def add_noise(point, noise):
     return point + np.random.normal(0, noise, 1)[0]
 
 
-def generate_data(nr_events=50_000, max_nr_tracks=3, noise=0.1):
+def generate_data(nr_events=50_000, min_nr_tracks=2, max_nr_tracks=3, noise=0.1):
     if constants.DIMENSION == 2:
         origin = (0, 0)
     if constants.DIMENSION == 3:
@@ -63,7 +63,8 @@ def generate_data(nr_events=50_000, max_nr_tracks=3, noise=0.1):
     for event in tqdm(range(nr_events)):
         event_dict[event] = [event]
         parameter_dict[event] = []
-        for track in range(np.random.randint(2, max_nr_tracks)):
+        nr_tracks = max_nr_tracks if min_nr_tracks == max_nr_tracks else np.random.randint(min_nr_tracks, max_nr_tracks)
+        for track in range(nr_tracks):
             random_index = 0
             if .5 < random.random():
                 random_index = 1
@@ -80,10 +81,12 @@ def generate_data(nr_events=50_000, max_nr_tracks=3, noise=0.1):
                 if constants.DIMENSION == 2:
                     detector_intersect[track] = circle_line_intersection(origin, rad, origin, track_vector)
                 if constants.DIMENSION == 3:
-                    detector_intersect[track] = sphere_line_intersection(origin, rad, origin, track_vector)[random_index]
-                    event_dict[event].append(add_noise(detector_intersect[track][2], noise))
+                    detector_intersect[track] = sphere_line_intersection(origin, rad, origin, track_vector)[
+                        random_index]
                 event_dict[event].append(add_noise(detector_intersect[track][0], noise))
                 event_dict[event].append(add_noise(detector_intersect[track][1], noise))
+                if constants.DIMENSION == 3:
+                    event_dict[event].append(add_noise(detector_intersect[track][2], noise))
                 event_dict[event].append(track)
     return event_dict, parameter_dict
 
@@ -113,7 +116,8 @@ def plot_first_row(data=f"output_{constants.DIMENSION}d.txt"):
     plt.grid()
     plt.xlabel("X-axis")
     plt.ylabel("Y-axis")
-    plt.title("Circles with Different Radii")
+    plt.title("Visualization of one Event")
+    plt.savefig(f"data_vis_{constants.DIMENSION}d.png")
     plt.show()
 
 
@@ -122,16 +126,22 @@ def plot_histogram(path=f"parameter_{constants.DIMENSION}d.txt"):
     plot_data = data.iloc[:, 2].tolist()
     for i in range(4, (len(data.columns)) - 1, 2):
         plot_data.extend(data.iloc[:, i].tolist())
-    plot_data = [float(value) for value in plot_data if value is not None]
+    if constants.DIMENSION == 2:
+        plot_data = [float(value) for value in plot_data if value is not None]
+    if constants.DIMENSION == 3:
+        split_data = [value.split(';') for value in plot_data if isinstance(value, str)]
+        plot_data = [float(value) for sublist in split_data for value in sublist]
     plt.hist(plot_data, bins=7)
+    plt.title(f"Histogram of Track Parameter for {constants.DIMENSION}D data")
+    plt.savefig(f"histogram_{constants.DIMENSION}d.png")
     plt.show()
 
 
 if __name__ == '__main__':  #
     np.random.seed(42)
     data, parameter = generate_data(nr_events=constants.NR_EVENTS, max_nr_tracks=20)
-    print_data(data)
+    print_data(data, f"output_{constants.DIMENSION}d.txt")
     print_data(parameter, f"parameter_{constants.DIMENSION}d.txt", parameter=True)
     if constants.DIMENSION == 2:
         plot_first_row(f"output_{constants.DIMENSION}d.txt")
-        plot_histogram()
+    plot_histogram()
